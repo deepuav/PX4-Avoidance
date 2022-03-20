@@ -111,6 +111,7 @@ generate_messages(
 ## Generate dynamic reconfigure parameters in the 'cfg' folder
 generate_dynamic_reconfigure_options(
   cfg/GlobalPlannerNode.cfg
+  cfg/RRTPlannerNode.cfg
 )
 
 ###################################
@@ -159,6 +160,8 @@ add_library(global_planner
   src/nodes/global_planner_node.cpp
   src/library/octomap_ompl_rrt.cpp
   src/library/octomap_rrt_planner.cpp
+  src/library/rrt_planner.cpp
+  src/nodes/rrt_planner_node.cpp
 )
 
 ## Add cmake target dependencies of the library
@@ -168,14 +171,16 @@ add_dependencies(global_planner ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXP
 
 ## Declare a C++ executable
 add_executable(global_planner_node src/nodes/global_planner_node_main.cpp)
+target_link_libraries(global_planner_node
+  global_planner ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OMPL_LIBRARIES}
+)
+
+add_executable(rrt_planner_node src/nodes/rrt_planner_node_main.cpp)
+target_link_libraries(rrt_planner_node global_planner ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OMPL_LIBRARIES}
+)
 
 add_executable(octomap_rrt_planner_node src/nodes/octomap_rrt_planner_node.cpp)
 target_link_libraries(octomap_rrt_planner_node global_planner ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OMPL_LIBRARIES}
-)
-
-## Specify libraries to link a library or executable target against
-target_link_libraries(global_planner_node
-  global_planner ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OMPL_LIBRARIES}
 )
 
 #############

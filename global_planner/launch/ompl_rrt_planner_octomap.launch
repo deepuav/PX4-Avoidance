@@ -6,7 +6,7 @@
     <arg name="world_file_name"    default="simple_obstacle" />
 
     <!-- Global Planner -->
-    <node name="global_planner_node" pkg="global_planner" type="octomap_rrt_planner_node" output="screen">
+    <node name="rrt_planner_node" pkg="global_planner" type="rrt_planner_node" output="screen">
         <param name="start_pos_x" value="$(arg start_pos_x)" />
         <param name="start_pos_y" value="$(arg start_pos_y)" />
         <param name="start_pos_z" value="$(arg start_pos_z)" />

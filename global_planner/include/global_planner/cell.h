@@ -20,7 +20,6 @@ class Cell {
   Cell(double x, double y, double z);
   Cell(double x, double y);
   Cell(geometry_msgs::Point point);
-  // Cell(Eigen::Vector3d point);
 
   // Get the indices of the Cell
   int xIndex() const;
