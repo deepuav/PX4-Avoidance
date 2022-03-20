@@ -31,7 +31,7 @@ class OctomapOmplRrt {
   Eigen::Vector3d lower_bound_, upper_bound_;
 
  public:
-  OctomapOmplRrt(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private);
+  OctomapOmplRrt();
   virtual ~OctomapOmplRrt();
 
   void setupProblem();

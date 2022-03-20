@@ -1,12 +1,9 @@
 #include "global_planner/rrt_planner_node.h"
-#include "global_planner/octomap_rrt_planner.h"
 #include "global_planner/octomap_ompl_rrt.h"
 
 using namespace std;
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
-
-namespace rrt_planner {
 
 RRTPlannerNode::RRTPlannerNode(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private)
     : nh_(nh),
@@ -69,9 +66,8 @@ RRTPlannerNode::RRTPlannerNode(const ros::NodeHandle& nh, const ros::NodeHandle&
   current_goal_.header.frame_id = frame_id_;
   current_goal_.pose.position = start_pos_;
   current_goal_.pose.orientation = tf::createQuaternionMsgFromYaw(start_yaw_);
+  rrt_planner.setIntermediateGoal(current_goal_);
   last_goal_ = current_goal_;
-
-  plan_ = false;
 
   speed_ = rrt_planner.default_speed_;
   start_time_ = ros::Time::now();
@@ -95,7 +91,7 @@ void RRTPlannerNode::readParams() {
   }
 
   initializeCameraSubscribers(camera_topics);
-  rrt_planner.goal_pos_ << start_pos_.x, start_pos_.y, start_pos_.z;
+  rrt_planner.goal_pos_ = State(start_pos_.x, start_pos_.y, start_pos_.z);
   double robot_radius;
   nh_.param<double>("robot_radius", robot_radius, 0.5);
   rrt_planner.setFrame(frame_id_);
@@ -112,7 +108,6 @@ void RRTPlannerNode::initializeCameraSubscribers(std::vector<std::string>& camer
 
 // Sets a new goal, plans a path to it and publishes some info
 void RRTPlannerNode::setNewGoal(const GoalState& goal) {
-  ROS_INFO("========== Set goal : %s ==========", goal.asString().c_str());
   rrt_planner.setGoal(goal);
   publishGoal(goal);
 }
@@ -201,14 +196,14 @@ void RRTPlannerNode::positionCallback(const geometry_msgs::PoseStamped& msg) {
       // path
       last_goal_ = current_goal_;
       current_goal_ = path_[0];
+      rrt_planner.setIntermediateGoal(current_goal_);
       path_.erase(path_.begin());
     }
   }
 }
 
 void RRTPlannerNode::clickedPointCallback(const geometry_msgs::PointStamped& msg) {
-  printPointInfo(msg.point.x, msg.point.y, msg.point.z);
-  plan_ = true;
+  //plan_ = true;
   geometry_msgs::PoseStamped pose;
   pose.header = msg.header;
   pose.pose.position = msg.point;
@@ -217,18 +212,18 @@ void RRTPlannerNode::clickedPointCallback(const geometry_msgs::PointStamped& msg
 }
 
 void RRTPlannerNode::moveBaseSimpleCallback(const geometry_msgs::PoseStamped& msg) {
-  plan_ = true;
+  //plan_ = true;
   State goal;
   setNewGoal(GoalState(msg.pose.position.x, msg.pose.position.y, clicked_goal_alt_, clicked_goal_radius_));
 }
 
 void RRTPlannerNode::fcuInputGoalCallback(const mavros_msgs::Trajectory& msg) {
 
-  plan_ = true;
+  //plan_ = true;
 
   State new_goal(msg.point_2.position.x, msg.point_2.position.y, msg.point_2.position.z);
-  if (msg.point_valid[1] == true && ((std::fabs(rrt_planner.goal_pos_(0) - new_goal(0)) > 0.001) ||
-                                     (std::fabs(rrt_planner.goal_pos_(1) - new_goal(1)) > 0.001))) {
+  if (msg.point_valid[1] == true && ((std::fabs(rrt_planner.goal_pos_.xPos() - new_goal.xPos()) > 0.001) ||
+                                     (std::fabs(rrt_planner.goal_pos_.yPos() - new_goal.yPos()) > 0.001))) {
     setNewGoal(new_goal);
   }
 }
@@ -250,7 +245,7 @@ void RRTPlannerNode::octomapFullCallback(const octomap_msgs::Octomap& msg) {
 }
 
 // Go through obstacle points and store them
-void OctomapRrtPlanner::depthCameraCallback(const sensor_msgs::PointCloud2& msg) {
+void RRTPlannerNode::depthCameraCallback(const sensor_msgs::PointCloud2& msg) {
   try {
     // Transform msg from camera frame to world frame
     ros::Time now = ros::Time::now();
@@ -278,6 +273,7 @@ void RRTPlannerNode::setCurrentPath(const std::vector<geometry_msgs::PoseStamped
   }
   last_goal_ = poses[0];
   current_goal_ = poses[1];
+  rrt_planner.setIntermediateGoal(current_goal_);
 
   for (int i = 2; i < poses.size(); ++i) {
     path_.push_back(poses[i]);
@@ -299,7 +295,7 @@ void RRTPlannerNode::cmdLoopCallback(const ros::TimerEvent& event) {
 
 void RRTPlannerNode::plannerLoopCallback(const ros::TimerEvent& event) {
   std::lock_guard<std::mutex> lock(mutex_);
-  bool is_in_goal = rrt_planner.goal_pos_.withinPositionRadius(rrt_planner.curr_pos_);
+  bool is_in_goal = isCloseToGoal();
   if (is_in_goal || rrt_planner.goal_is_blocked_) {
     popNextGoal();
   }
@@ -315,7 +311,7 @@ void RRTPlannerNode::plannerLoopCallback(const ros::TimerEvent& event) {
 }
 
 // Publish the position of goal
-void RRTPlannerNode::publishGoal(const State& goal) {
+void RRTPlannerNode::publishGoal(const GoalState& goal) {
   geometry_msgs::PointStamped pointMsg;
   pointMsg.header.frame_id = frame_id_;
   pointMsg.point = goal.toPoint();
@@ -330,23 +326,24 @@ void RRTPlannerNode::publishGoal(const State& goal) {
 // Publish the current path
 void RRTPlannerNode::publishPath() {
   auto path_msg = rrt_planner.getPathMsg();
-  PathWithRiskMsg risk_msg = rrt_planner.getPathWithRiskMsg();
   // Always publish as temporary to remove any obsolete temporary path
   global_temp_path_pub_.publish(path_msg);
   setCurrentPath(path_msg.poses);
-  smooth_path_pub_.publish(smoothPath(path_msg));
-
-  auto simple_path = simplifyPath(&rrt_planner, rrt_planner.curr_path_, simplify_iterations_, simplify_margin_);
-  auto simple_path_msg = rrt_planner.getPathMsg(simple_path);
-  global_temp_path_pub_.publish(simple_path_msg);
-  setCurrentPath(simple_path_msg.poses);
-  smooth_path_pub_.publish(smoothPath(simple_path_msg));
+  //smooth_path_pub_.publish(smoothPath(path_msg));
 }
 
-// Prints information about the point, mostly the risk of the containing state
-void RRTPlannerNode::printPointInfo(double x, double y, double z) {
-  // Update explored state
-  printPointStats(&rrt_planner, x, y, z);
+template <typename P1, typename P2>
+P1 subtractPoints(const P1& p1, const P2& p2) {
+  P1 new_p;
+  new_p.x = p1.x - p2.x;
+  new_p.y = p1.y - p2.y;
+  new_p.z = p1.z - p2.z;
+  return new_p;
+}
+
+template <typename P>
+tf::Vector3 toTfVector3(const P& point) {
+  return tf::Vector3(point.x, point.y, point.z);
 }
 
 void RRTPlannerNode::publishSetpoint() {
@@ -377,6 +374,26 @@ void RRTPlannerNode::publishSetpoint() {
   mavros_obstacle_free_path_pub_.publish(obst_free_path);
 }
 
-//bool RRTPlannerNode::isCloseToGoal() { return distance(current_goal_, last_pos_) < speed_; }
+bool RRTPlannerNode::isCloseToGoal() { 
 
-}  // namespace rrt_planner
+  double dist = poseDistance(rrt_planner.goal_pos_, rrt_planner.curr_pos_);
+
+  if( dist < 0.5)
+    return true;
+  else 
+    return false; 
+
+}
+
+double RRTPlannerNode::poseDistance(const State& p1, const State& p2) {
+  
+  double dx = p2.xPos() - p1.xPos();
+  double dy = p2.yPos() - p1.yPos();
+  double dz = p2.zPos() - p1.zPos();
+
+  Vector3d vec(dx,dy,dz);
+
+  return  vec.norm();
+
+}
+//bool RRTPlannerNode::isCloseToGoal() { return distance(current_goal_, last_pos_) < speed_; }

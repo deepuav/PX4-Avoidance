@@ -6,7 +6,7 @@ int main(int argc, char** argv) {
   ros::NodeHandle nh("~");
   ros::NodeHandle nh_private("");
 
-  rrt_planner::RRTPlannerNode rrt_planner_node(nh, nh_private);
+  RRTPlannerNode rrt_planner_node(nh, nh_private);
 
   ros::spin();
   return 0;

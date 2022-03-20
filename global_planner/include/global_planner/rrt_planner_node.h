@@ -35,8 +35,6 @@
 #include <avoidance/rviz_world_loader.h>
 #endif
 
-namespace rrt_planner {
-
 struct cameraData {
   ros::Subscriber pointcloud_sub_;
 };
@@ -44,7 +42,7 @@ struct cameraData {
 class RRTPlannerNode {
  public:
   // TODO: Deque instead of vector
-  GlobalPlanner global_planner_;
+  RRTPlanner rrt_planner;
   std::vector<State> waypoints_;  // Intermediate goals, from file, mavros
                                      // mission or intermediate goals
   RRTPlannerNode(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private);
@@ -89,7 +87,7 @@ class RRTPlannerNode {
   std::unique_ptr<ros::AsyncSpinner> plannerloop_spinner_;
 
   tf::TransformListener listener_;
-  dynamic_reconfigure::Server<global_planner::GlobalPlannerNodeConfig> server_;
+  dynamic_reconfigure::Server<global_planner::RRTPlannerNodeConfig> server_;
 
   nav_msgs::Path actual_path_;
   geometry_msgs::Point start_pos_;
@@ -125,13 +123,13 @@ class RRTPlannerNode {
   void readParams();
   void initializeCameraSubscribers(std::vector<std::string>& camera_topics);
   void receivePath(const nav_msgs::Path& msg);
-  void setNewGoal(const GoalCell& goal);
+  void setNewGoal(const GoalState& goal);
   void popNextGoal();
   void planPath();
-  //void setIntermediateGoal(); // TODO
   bool isCloseToGoal();
+  double poseDistance(const State& p1, const State& p2);
   void setCurrentPath(const std::vector<geometry_msgs::PoseStamped>& poses);
-  void dynamicReconfigureCallback(global_planner::GlobalPlannerNodeConfig& config, uint32_t level);
+  void dynamicReconfigureCallback(global_planner::RRTPlannerNodeConfig& config, uint32_t level);
   void velocityCallback(const geometry_msgs::TwistStamped& msg);
   void positionCallback(const geometry_msgs::PoseStamped& msg);
   void clickedPointCallback(const geometry_msgs::PointStamped& msg);
@@ -141,12 +139,9 @@ class RRTPlannerNode {
   void fcuInputGoalCallback(const mavros_msgs::Trajectory& msg);
   void cmdLoopCallback(const ros::TimerEvent& event);
   void plannerLoopCallback(const ros::TimerEvent& event);
-  void publishGoal(const GoalCell& goal);
+  void publishGoal(const GoalState& goal);
   void publishPath();
   void publishSetpoint();
-  void printPointInfo(double x, double y, double z);
 };
-
-}  // namespace rrt_planner
 
 #endif  // RRT_PLANNER_RRT_PLANNER_NODE_H

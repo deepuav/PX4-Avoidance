@@ -9,8 +9,6 @@
 
 #include "global_planner/common.h"
 
-namespace rrt_planner {
-
 class State {
  public:
   State();
@@ -53,7 +51,5 @@ class GoalState : public State {
   double radius_;
   bool is_temporary_;
 };
-
-}  // namespace rrt_planner
 
 #endif  // RRT_PLANNER_STATE

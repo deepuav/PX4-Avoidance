@@ -21,10 +21,9 @@
 #include "global_planner/state.h"
 #include "global_planner/common.h"
 #include "global_planner/common_ros.h"
+#include <global_planner/octomap_ompl_rrt.h>
 #include <Eigen/Dense>
  
-namespace rrt_planner {
-
 class RRTPlanner {
  public:
   octomap::OcTree* octree_ = NULL;
@@ -54,6 +53,8 @@ class RRTPlanner {
 
   std::vector<State> curr_path_;
 
+  void setIntermediateGoal(geometry_msgs::PoseStamped& intermediate_goal);
+
   RRTPlanner();
   ~RRTPlanner();
 
@@ -74,17 +75,18 @@ class RRTPlanner {
   bool findPath(std::vector<State>& path);
   double planYaw();
   void checkBounds(const Eigen::Vector3d& in_lower, const Eigen::Vector3d& in_upper, Eigen::Vector3d& out_lower, Eigen::Vector3d& out_upper );
- 
+  geometry_msgs::PoseStamped intermediate_goal_;
+
   bool getGlobalPath();
   void goBack();
   void stop();
   void setRobotRadius(double radius);
+  OctomapOmplRrt rrt_planner_;
 
  private:
   double robot_radius_;
   double octree_resolution_;
 };
 
-}  // namespace rrt_planner
 
 #endif  // RRT_PLANNER_RRT_PLANNER_H
